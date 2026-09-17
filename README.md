@@ -1,16 +1,50 @@
-# task_manager_app1
+# Task Manager
 
-A new Flutter project.
+A Flutter planner app for creating tasks, tracking what’s done, and reflecting on how each task felt. The UI uses a calm pink theme.
 
-## Getting Started
+**Repo:** [https://github.com/jiaahadid/task-manager-app1](https://github.com/jiaahadid/task-manager-app1)
 
-This project is a starting point for a Flutter application.
+## Features
 
-A few resources to get you started if this is your first Flutter project:
+- Sign up, log in, and stay signed in until you log out
+- Each account keeps its own tasks
+- Add, edit, and delete to-do items with due dates
+- Complete a task and save a short feeling note
+- Home screen shows upcoming tasks and a daily quote
+- Reminder notification 1 day before a task is due
+- Phone vibration when you save, complete, or delete a task
 
-- [Lab: Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Cookbook: Useful Flutter samples](https://docs.flutter.dev/cookbook)
+## Screens
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+| Screen | What it does |
+| --- | --- |
+| Get Started | Welcome page |
+| Sign Up / Login | Create an account or sign in |
+| Home | Quote, upcoming tasks, and shortcuts |
+| To-Do | Active tasks, add/edit/delete/complete |
+| Add Task | Task name and due date |
+| Finished | Completed tasks and feelings |
+
+## Run the app
+
+1. Install [Flutter](https://docs.flutter.dev/get-started/install)
+2. Open this folder
+3. Get packages and run:
+
+```bash
+flutter pub get
+flutter run
+```
+
+Use a connected Android device or an emulator. Chrome also works for a web preview:
+
+```bash
+flutter run -d chrome
+```
+
+## Built with
+
+- Flutter / Dart
+- Shared Preferences for local accounts and tasks
+- Flutter Local Notifications for due-date reminders
+- ZenQuotes API for the home-screen quote

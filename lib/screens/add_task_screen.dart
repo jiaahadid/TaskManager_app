@@ -28,7 +28,7 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
       context: context,
       initialDate: DateTime.now(),
       firstDate: DateTime(2024),
-      lastDate: DateTime(2030),
+      lastDate: DateTime(2030, 12, 31),
     );
     if (picked != null) setState(() => _selectedDate = picked);
   }
@@ -49,41 +49,46 @@ class _AddTaskScreenState extends State<AddTaskScreen> {
 
     final title = _controller.text.trim();
 
-    // 1️⃣ Save task
-    await DatabaseHelper.instance.insertTask({
-      'title': title,
-      'dueDate': _selectedDate!.toIso8601String(),
-      'isDone': 0,
-      'feeling': null,
-    });
+    try {
+      // 1️⃣ Save task and use the returned id for the reminder
+      final taskId = await DatabaseHelper.instance.insertTask({
+        'title': title,
+        'dueDate': _selectedDate!.toIso8601String(),
+        'isDone': 0,
+        'feeling': null,
+      });
 
-    // 2️⃣ Get task id for notification
-    final tasks = await DatabaseHelper.instance.getAllTasks();
-    final newTask = tasks.lastWhere((t) => t['title'] == title);
-    final taskId = newTask['id'] as int;
+      // 2️⃣ Schedule notification 1 day before due date
+      await NotificationService.scheduleTaskReminder(
+        id: taskId,
+        taskTitle: title,
+        dueDate: _selectedDate!,
+      );
 
-    // 3️⃣ Schedule notification 1 day before due date
-    await NotificationService.scheduleTaskReminder(
-      id: taskId,
-      taskTitle: title,
-      dueDate: _selectedDate!,
-    );
+      // 3️⃣ Vibrate to confirm save
+      await VibrationService.onSave();
 
-    // 4️⃣ Vibrate to confirm save
-    await VibrationService.onSave();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Task saved! Reminder set for 1 day before 💗'),
+          backgroundColor: Color(0xFFF4B6C2),
+          duration: Duration(seconds: 2),
+        ),
+      );
 
-    if (!mounted) return;
-    setState(() => _saving = false);
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Task saved! Reminder set for 1 day before 💗'),
-        backgroundColor: Color(0xFFF4B6C2),
-        duration: Duration(seconds: 2),
-      ),
-    );
-
-    Navigator.pop(context);
+      Navigator.pop(context);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Could not save task. Please try again.'),
+          backgroundColor: Color(0xFFE57373),
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
   }
 
   @override

@@ -22,8 +22,9 @@ class _TodoScreenState extends State<TodoScreen> {
 
   Future<void> _loadTasks() async {
     final data = await DatabaseHelper.instance.getAllTasks();
+    if (!mounted) return;
     setState(() {
-      _tasks = data.where((task) => task['isDone'] == 0).toList();
+      _tasks = data.where((task) => !DatabaseHelper.isDone(task)).toList();
     });
   }
 
@@ -34,110 +35,114 @@ class _TodoScreenState extends State<TodoScreen> {
 
   Future<void> _completeTask(Map<String, dynamic> task) async {
     String? feeling = await _askFeeling(context);
-    if (feeling != null && feeling.isNotEmpty) {
-      await DatabaseHelper.instance.updateTask(task['id'], {
-        'isDone': 1,
-        'feeling': feeling,
-      });
-      await NotificationService.cancelNotification(task['id'] as int);
-      await VibrationService.onComplete(); // long satisfying buzz
-      _loadTasks();
-    }
+    if (feeling == null) return;
+
+    final taskId = task['id'] is int ? task['id'] as int : int.parse('${task['id']}');
+    await DatabaseHelper.instance.updateTask(taskId, {
+      'isDone': 1,
+      'feeling': feeling.isEmpty ? '-' : feeling,
+    });
+    await NotificationService.cancelNotification(taskId);
+    await VibrationService.onComplete(); // long satisfying buzz
+    if (!mounted) return;
+    _loadTasks();
   }
 
   Future<void> _editTask(Map<String, dynamic> task) async {
     final titleController = TextEditingController(text: task['title']);
-    DateTime selectedDate = DateTime.parse(task['dueDate']);
+    DateTime selectedDate =
+        DateTime.tryParse(task['dueDate']?.toString() ?? '') ?? DateTime.now();
+    final taskId = task['id'] is int ? task['id'] as int : int.parse('${task['id']}');
 
     await showDialog(
-      context: context,
-      builder: (context) {
-        return StatefulBuilder(
-          builder: (context, setDialogState) {
-            return AlertDialog(
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(20)),
-              title: const Text("Edit Task 💗"),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  TextField(
-                    controller: titleController,
-                    decoration: const InputDecoration(
-                      hintText: "Task name",
-                      prefixIcon: Icon(Icons.task_alt_outlined),
+        context: context,
+        builder: (context) {
+          return StatefulBuilder(
+            builder: (context, setDialogState) {
+              return AlertDialog(
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(20)),
+                title: const Text("Edit Task 💗"),
+                content: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    TextField(
+                      controller: titleController,
+                      decoration: const InputDecoration(
+                        hintText: "Task name",
+                        prefixIcon: Icon(Icons.task_alt_outlined),
+                      ),
                     ),
+                    const SizedBox(height: 14),
+                    SizedBox(
+                      width: double.infinity,
+                      child: OutlinedButton.icon(
+                        icon: const Icon(Icons.calendar_today_outlined, size: 16),
+                        label: Text(
+                          DateFormat('yyyy-MM-dd').format(selectedDate),
+                          style: const TextStyle(fontSize: 13),
+                        ),
+                        style: OutlinedButton.styleFrom(
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12)),
+                          side: const BorderSide(color: Color(0xFFF4B6C2)),
+                          foregroundColor: const Color(0xFF4A4A4A),
+                        ),
+                        onPressed: () async {
+                          DateTime? picked = await showDatePicker(
+                            context: context,
+                            initialDate: selectedDate,
+                            firstDate: DateTime(2024),
+                            lastDate: DateTime(2030, 12, 31),
+                          );
+                          if (picked != null) {
+                            setDialogState(() => selectedDate = picked);
+                          }
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: const Text("Cancel"),
                   ),
-                  const SizedBox(height: 14),
-                  SizedBox(
-                    width: double.infinity,
-                    child: OutlinedButton.icon(
-                      icon: const Icon(Icons.calendar_today_outlined, size: 16),
-                      label: Text(
-                        DateFormat('yyyy-MM-dd').format(selectedDate),
-                        style: const TextStyle(fontSize: 13),
-                      ),
-                      style: OutlinedButton.styleFrom(
-                        shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12)),
-                        side: const BorderSide(color: Color(0xFFF4B6C2)),
-                        foregroundColor: const Color(0xFF4A4A4A),
-                      ),
-                      onPressed: () async {
-                        DateTime? picked = await showDatePicker(
-                          context: context,
-                          initialDate: selectedDate,
-                          firstDate: DateTime(2024),
-                          lastDate: DateTime(2030),
+                  ElevatedButton(
+                    onPressed: () async {
+                      if (titleController.text.trim().length < 3) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Task name must be at least 3 characters'),
+                            backgroundColor: Color(0xFFF4B6C2),
+                          ),
                         );
-                        if (picked != null) {
-                          setDialogState(() => selectedDate = picked);
-                        }
-                      },
-                    ),
+                        return;
+                      }
+                      await DatabaseHelper.instance.updateTask(taskId, {
+                        'title': titleController.text.trim(),
+                        'dueDate': selectedDate.toIso8601String(),
+                      });
+                      // Reschedule notification with updated date
+                      await NotificationService.cancelNotification(taskId);
+                      await NotificationService.scheduleTaskReminder(
+                        id: taskId,
+                        taskTitle: titleController.text.trim(),
+                        dueDate: selectedDate,
+                      );
+                      await VibrationService.onSave(); // buzz on edit save too
+                      if (!context.mounted) return;
+                      Navigator.pop(context);
+                      _loadTasks();
+                    },
+                    child: const Text("Save Changes"),
                   ),
                 ],
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(context),
-                  child: const Text("Cancel"),
-                ),
-                ElevatedButton(
-                  onPressed: () async {
-                    if (titleController.text.trim().length < 3) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Task name must be at least 3 characters'),
-                          backgroundColor: Color(0xFFF4B6C2),
-                        ),
-                      );
-                      return;
-                    }
-                    await DatabaseHelper.instance.updateTask(task['id'], {
-                      'title': titleController.text.trim(),
-                      'dueDate': selectedDate.toIso8601String(),
-                    });
-                    // Reschedule notification with updated date
-                    await NotificationService.cancelNotification(task['id'] as int);
-                    await NotificationService.scheduleTaskReminder(
-                      id: task['id'] as int,
-                      taskTitle: titleController.text.trim(),
-                      dueDate: selectedDate,
-                    );
-                    await VibrationService.onSave(); // buzz on edit save too
-                    if (!context.mounted) return;
-                    Navigator.pop(context);
-                    _loadTasks();
-                  },
-                  child: const Text("Save Changes"),
-                ),
-              ],
-            );
-          },
-        );
-      },
-    );
+              );
+            },
+          );
+        },
+      );
   }
 
   Future<void> _deleteTask(Map<String, dynamic> task) async {
@@ -164,15 +169,17 @@ class _TodoScreenState extends State<TodoScreen> {
     );
 
     if (confirm == true) {
-      await NotificationService.cancelNotification(task['id'] as int);
-      await DatabaseHelper.instance.deleteTask(task['id']);
+      final taskId = task['id'] is int ? task['id'] as int : int.parse('${task['id']}');
+      await NotificationService.cancelNotification(taskId);
+      await DatabaseHelper.instance.deleteTask(taskId);
       await VibrationService.onDelete(); // double buzz on delete
+      if (!mounted) return;
       _loadTasks();
     }
   }
 
   Future<String?> _askFeeling(BuildContext context) async {
-    TextEditingController controller = TextEditingController();
+    final controller = TextEditingController();
     return await showDialog<String>(
       context: context,
       builder: (context) => AlertDialog(
@@ -189,7 +196,7 @@ class _TodoScreenState extends State<TodoScreen> {
             child: const Text("Cancel"),
           ),
           ElevatedButton(
-            onPressed: () => Navigator.pop(context, controller.text),
+            onPressed: () => Navigator.pop(context, controller.text.trim()),
             child: const Text("Save"),
           ),
         ],
@@ -213,7 +220,8 @@ class _TodoScreenState extends State<TodoScreen> {
         itemCount: _tasks.length,
         itemBuilder: (context, index) {
           final task = _tasks[index];
-          final dueDate = DateTime.parse(task['dueDate']);
+          final dueDate = DateTime.tryParse(task['dueDate']?.toString() ?? '') ??
+              DateTime.now();
 
           return Container(
             margin: const EdgeInsets.only(bottom: 12),

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import '../helpers/auth_helper.dart';
 import '../services/api_service.dart';
 import '../database/database_helper.dart';
 
@@ -26,10 +27,10 @@ class _HomeScreenState extends State<HomeScreen> {
     final now = DateTime.now();
 
     final upcoming = data
-        .where((task) => task['isDone'] == 0)
+        .where((task) => !DatabaseHelper.isDone(task))
         .map((task) => {
       ...task,
-      '_parsedDate': DateTime.parse(task['dueDate']),
+      '_parsedDate': DateTime.tryParse(task['dueDate']?.toString() ?? '') ?? now,
     })
         .where((task) =>
     (task['_parsedDate'] as DateTime).isAfter(now) ||
@@ -78,7 +79,24 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text("My Planner 💗")),
+      appBar: AppBar(
+        title: const Text("My Planner 💗"),
+        actions: [
+          IconButton(
+            tooltip: 'Log out',
+            icon: const Icon(Icons.logout),
+            onPressed: () async {
+              await AuthHelper.logout();
+              if (!context.mounted) return;
+              Navigator.pushNamedAndRemoveUntil(
+                context,
+                '/login',
+                (route) => false,
+              );
+            },
+          ),
+        ],
+      ),
       body: RefreshIndicator(
         onRefresh: () async {
           _refreshQuote();
@@ -206,10 +224,10 @@ class _HomeScreenState extends State<HomeScreen> {
                         padding: const EdgeInsets.symmetric(
                             horizontal: 10, vertical: 4),
                         decoration: BoxDecoration(
-                          color: dueColor.withOpacity(0.15),
+                          color: dueColor.withValues(alpha: 0.15),
                           borderRadius: BorderRadius.circular(20),
                           border: Border.all(
-                              color: dueColor.withOpacity(0.4)),
+                              color: dueColor.withValues(alpha: 0.4)),
                         ),
                         child: Text(
                           dueLabel,
@@ -243,7 +261,10 @@ class _HomeScreenState extends State<HomeScreen> {
             SizedBox(
               width: double.infinity,
               child: ElevatedButton(
-                onPressed: () => Navigator.pushNamed(context, '/finished'),
+                onPressed: () async {
+                  await Navigator.pushNamed(context, '/finished');
+                  _loadUpcomingTasks();
+                },
                 child: const Text("Finished Tasks"),
               ),
             ),

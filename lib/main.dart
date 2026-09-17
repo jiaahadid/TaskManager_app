@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:device_preview/device_preview.dart';
+import 'helpers/auth_helper.dart';
 import 'screens/get_started_screen.dart';
 import 'screens/login_screen.dart';
 import 'screens/signup_screen.dart';
@@ -7,11 +8,14 @@ import 'screens/home_screen.dart';
 import 'screens/todo_screen.dart';
 import 'screens/add_task_screen.dart';
 import 'screens/finished_screen.dart';
+import 'services/notification_service.dart';
 
-void main() {
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await NotificationService.init();
   runApp(
     DevicePreview(
-      enabled: true,
+      enabled: false,
       builder: (context) => const TaskManagerApp(),
     ),
   );
@@ -24,7 +28,6 @@ class TaskManagerApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      useInheritedMediaQuery: true,
       locale: DevicePreview.locale(context),
       builder: DevicePreview.appBuilder,
       title: 'Task Manager',
@@ -54,7 +57,7 @@ class TaskManagerApp extends StatelessWidget {
           ),
         ),
       ),
-      home: const GetStartedScreen(),
+      home: const AuthGate(),
       routes: {
         '/login': (context) => const LoginScreen(),
         '/signup': (context) => const SignUpScreen(),
@@ -62,6 +65,25 @@ class TaskManagerApp extends StatelessWidget {
         '/todo': (context) => const TodoScreen(),
         '/add': (context) => const AddTaskScreen(),
         '/finished': (context) => const FinishedScreen(),
+      },
+    );
+  }
+}
+
+class AuthGate extends StatelessWidget {
+  const AuthGate({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<bool>(
+      future: AuthHelper.isLoggedIn(),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData) {
+          return const Scaffold(
+            body: Center(child: CircularProgressIndicator()),
+          );
+        }
+        return snapshot.data! ? const HomeScreen() : const GetStartedScreen();
       },
     );
   }

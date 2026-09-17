@@ -20,10 +20,9 @@ class _FinishedScreenState extends State<FinishedScreen> {
 
   Future<void> _loadFinishedTasks() async {
     final data = await DatabaseHelper.instance.getAllTasks();
-
+    if (!mounted) return;
     setState(() {
-      _finishedTasks =
-          data.where((task) => task['isDone'] == 1).toList();
+      _finishedTasks = data.where(DatabaseHelper.isDone).toList();
     });
   }
 
@@ -38,8 +37,8 @@ class _FinishedScreenState extends State<FinishedScreen> {
         itemCount: _finishedTasks.length,
         itemBuilder: (context, index) {
           final task = _finishedTasks[index];
-          DateTime dueDate =
-          DateTime.parse(task['dueDate']);
+          DateTime dueDate = DateTime.tryParse(task['dueDate']?.toString() ?? '') ??
+              DateTime.now();
 
           return Container(
             margin: const EdgeInsets.only(bottom: 12),
